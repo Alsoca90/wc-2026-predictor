@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WORLD CUP '26 — ARCADE PREDICTOR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --crt-bg:#0a0e1a; --panel:#15203b; --panel-edge:#2b3c66;
+    --pitch:#2f9e44; --pitch-dk:#268a3a; --line:#eef6ee;
+    --amber:#ffd23f; --red:#ff5a3c; --cyan:#46c8ff; --ink:#0a0e1a;
+    --win:#3ddc84; --lose:#7b8aab;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:radial-gradient(circle at 50% 0%, #1a2647 0%, var(--crt-bg) 70%);
+    color:var(--line); font-family:"Press Start 2P",monospace; min-height:100%;
+    display:flex; align-items:center; justify-content:center; padding:18px; line-height:1.7;}
+  .cabinet{width:100%; max-width:660px; background:var(--panel); border:4px solid var(--panel-edge);
+    box-shadow:0 0 0 4px var(--ink),0 0 0 8px #243a6b,0 14px 0 #060912,0 0 40px rgba(70,200,255,.15);
+    border-radius:6px; padding:16px; position:relative; overflow:hidden;}
+  .cabinet::after{content:""; position:absolute; inset:0; pointer-events:none; z-index:50;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.16) 0px,rgba(0,0,0,.16) 1px,transparent 2px,transparent 4px);
+    mix-blend-mode:multiply; animation:flick 6s steps(60) infinite;}
+  @keyframes flick{0%,97%{opacity:.5}98%{opacity:.35}100%{opacity:.5}}
+  .title{font-size:15px; color:var(--amber); text-align:center; letter-spacing:1px; text-shadow:2px 2px 0 var(--red); margin-bottom:2px}
+  .sub{font-size:7px; color:var(--cyan); text-align:center; margin-bottom:14px}
+  .blink{animation:blink 1.1s steps(2) infinite} @keyframes blink{50%{opacity:0}}
+
+  .scoreboard{display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px;
+    background:var(--ink); border:3px solid var(--panel-edge); border-radius:4px; padding:10px 8px; margin-bottom:12px;}
+  .sb-team{font-size:8px; text-align:center} .sb-score{font-size:26px; color:var(--amber); text-align:center;
+    text-shadow:0 0 8px rgba(255,210,63,.5); white-space:nowrap}
+  .sb-clock{font-size:7px; color:var(--cyan); text-align:center; margin-top:4px}
+
+  .pitch{position:relative; height:200px; border:3px solid var(--line);
+    background:repeating-linear-gradient(90deg,var(--pitch) 0 28px,var(--pitch-dk) 28px 56px);
+    overflow:hidden; border-radius:2px;}
+  .center-line{position:absolute; left:50%; top:0; bottom:0; width:2px; background:var(--line); transform:translateX(-1px)}
+  .center-circle{position:absolute; left:50%; top:50%; width:54px; height:54px; border:2px solid var(--line); border-radius:50%; transform:translate(-50%,-50%)}
+  .goal{position:absolute; top:50%; transform:translateY(-50%); width:8px; height:62px; border:2px solid var(--line); background:rgba(255,255,255,.08)}
+  .goal.l{left:0} .goal.r{right:0}
+  .net{position:absolute; top:50%; transform:translateY(-50%); width:8px; height:62px; background-size:4px 4px; opacity:.5;
+    background-image:linear-gradient(0deg,rgba(255,255,255,.4) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.4) 1px,transparent 1px);}
+  .net.l{left:0} .net.r{right:0}
+  .player{position:absolute; top:50%; width:18px; height:30px; transition:left .25s linear,top .25s linear; image-rendering:pixelated}
+  .player svg{width:100%; height:100%; display:block}
+  .runner .leg{animation:run .22s steps(2) infinite} @keyframes run{50%{transform:translateY(-2px)}}
+  .ball{position:absolute; top:50%; width:10px; height:10px; border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#fff 0 40%,#cfd6e4 60%,#8b97b3 100%);
+    box-shadow:0 0 0 1px #2a2f3a inset; transition:left .25s linear,top .25s linear; z-index:6}
+  .ball.spin{animation:spin .3s linear infinite} @keyframes spin{to{transform:rotate(360deg)}}
+  .flash{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:32px;
+    color:var(--amber); text-shadow:3px 3px 0 var(--red); opacity:0; z-index:8; pointer-events:none; letter-spacing:2px}
+  .flash.show{animation:goalpop 1.1s ease-out}
+  @keyframes goalpop{0%{opacity:0;transform:scale(.4)}25%{opacity:1;transform:scale(1.15)}70%{opacity:1;transform:scale(1)}100%{opacity:0}}
+  .shake{animation:shake .4s steps(4)} @keyframes shake{25%{transform:translate(2px,-2px)}50%{transform:translate(-2px,2px)}75%{transform:translate(2px,2px)}}
+
+  .selects{display:grid; grid-template-columns:1fr auto 1fr; gap:8px; align-items:center; margin:12px 0}
+  .vs{font-size:12px; color:var(--red); text-align:center}
+  select{width:100%; font-family:inherit; font-size:8px; color:var(--ink); background:var(--amber);
+    border:3px solid var(--ink); border-radius:3px; padding:8px 6px; cursor:pointer; appearance:none; text-align:center}
+  select:focus-visible{outline:3px solid var(--cyan); outline-offset:2px}
+  .venue{display:flex; gap:8px; justify-content:center; font-size:7px; margin-bottom:12px; flex-wrap:wrap}
+  .venue label{cursor:pointer; color:var(--lose)} .venue input{accent-color:var(--cyan)}
+  .venue input:checked + span{color:var(--cyan)}
+  .kick{width:100%; font-family:inherit; font-size:13px; color:var(--ink); background:var(--red);
+    border:none; border-bottom:6px solid #9e2c1c; border-radius:4px; padding:14px; cursor:pointer;
+    letter-spacing:2px; text-shadow:1px 1px 0 rgba(255,255,255,.3); transition:transform .05s}
+  .kick:hover{filter:brightness(1.08)} .kick:active{transform:translateY(4px); border-bottom-width:2px}
+  .kick:disabled{background:var(--lose); border-bottom-color:#4a5572; cursor:not-allowed; filter:none}
+  .kick:focus-visible{outline:3px solid var(--cyan); outline-offset:3px}
+
+  .result{margin-top:14px} .verdict{font-size:11px; text-align:center; color:var(--win); margin-bottom:6px; text-shadow:2px 2px 0 var(--ink)}
+  .meta{font-size:7px; text-align:center; color:var(--cyan); margin-bottom:12px}
+  .bars{display:grid; gap:8px; margin-bottom:14px}
+  .bar-row{display:grid; grid-template-columns:74px 1fr 34px; align-items:center; gap:8px; font-size:7px}
+  .bar-track{height:14px; background:var(--ink); border:2px solid var(--panel-edge); border-radius:2px; overflow:hidden}
+  .bar-fill{height:100%; width:0; transition:width .9s cubic-bezier(.2,.8,.2,1)}
+
+  .comm{border-top:2px dashed var(--panel-edge); padding-top:12px}
+  .comm-block{margin-bottom:12px}
+  .mic{font-size:7px; color:var(--amber); margin-bottom:6px}
+  .mic .flag{color:var(--cyan)}
+  .comm-text{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px; line-height:1.7; color:var(--line)}
+  .comm-text.es{color:#ffe9b0}
+  .foot{font-size:6px; color:var(--lose); text-align:center; margin-top:14px; line-height:1.9}
+  .foot b{color:var(--amber)}
+  @media (max-width:520px){.title{font-size:11px} .pitch{height:170px} .sb-score{font-size:20px} .comm-text{font-size:10px}}
+  @media (prefers-reduced-motion:reduce){.cabinet::after,.runner .leg,.ball.spin{animation:none} .player,.ball{transition:none} .shake{animation:none}}
+</style>
+</head>
+<body>
+<div class="cabinet" id="cab">
+  <div class="title">WORLD CUP '26</div>
+  <div class="sub">ARCADE OUTCOME PREDICTOR <span class="blink">●</span></div>
+
+  <div class="scoreboard">
+    <div class="sb-team" id="sbA">TEAM A</div>
+    <div><div class="sb-score" id="score">0 - 0</div><div class="sb-clock" id="clock">00:00</div></div>
+    <div class="sb-team" id="sbB">TEAM B</div>
+  </div>
+
+  <div class="pitch" id="pitch">
+    <div class="center-line"></div><div class="center-circle"></div>
+    <div class="net l"></div><div class="net r"></div><div class="goal l"></div><div class="goal r"></div>
+    <div class="player runner" id="pA"></div><div class="player runner" id="pB"></div>
+    <div class="ball spin" id="ball"></div><div class="flash" id="flash">GOAL!!!</div>
+  </div>
+
+  <div class="selects">
+    <select id="teamA" aria-label="Team A"></select><div class="vs">VS</div><select id="teamB" aria-label="Team B"></select>
+  </div>
+  <div class="venue" role="radiogroup" aria-label="Venue">
+    <label><input type="radio" name="venue" value="N" checked><span> NEUTRAL</span></label>
+    <label><input type="radio" name="venue" value="A"><span> A HOME</span></label>
+    <label><input type="radio" name="venue" value="B"><span> B HOME</span></label>
+  </div>
+  <button class="kick" id="kick">▶ KICK OFF</button>
+
+  <div class="result" id="result"></div>
+  <div class="foot">
+    SCORELINE &amp; xG &rarr; <b>Dixon&#8209;Coles</b> · WIN/DRAW/LOSS &rarr; <b>LightGBM + Dixon&#8209;Coles blend</b><br>
+    Real model outputs precomputed for all 48 nations. Match review auto-generated from the result.
+  </div>
+</div>
+
+<script>
+const DATA = __EMBED_DATA__;
+const TEAMS = DATA.teams, ELO = DATA.elo, LK = DATA.lk;
+
+const KIT = {Argentina:["#79b4e6","#fff"],Spain:["#c8102e","#ffd100"],France:["#1e3a8a","#fff"],
+England:["#fff","#cf142b"],Brazil:["#ffdf00","#009c3b"],Portugal:["#aa151b","#006233"],
+Netherlands:["#ff6200","#fff"],Germany:["#fff","#111"],Italy:["#1c4fa0","#fff"],Croatia:["#ff3b30","#fff"],
+Belgium:["#e30613","#fdda24"],Colombia:["#ffd100","#003087"],Mexico:["#006847","#fff"],
+"United States":["#fff","#0a3161"],Japan:["#0b1b8f","#fff"],Morocco:["#c1272d","#006233"],
+Norway:["#ba0c2f","#fff"],Uruguay:["#5cb8e6","#111"],Switzerland:["#d52b1e","#fff"],Denmark:["#c8102e","#fff"],
+Ecuador:["#ffd100","#034ea2"],Senegal:["#00853f","#fdef42"],Nigeria:["#008753","#fff"],Ghana:["#ce1126","#fcd116"],
+Australia:["#fdb913","#005826"],Canada:["#d52b1e","#fff"],Iran:["#fff","#239f40"],"South Korea":["#c8102e","#0047a0"],
+Poland:["#fff","#dc143c"],Serbia:["#c6363c","#fff"],Egypt:["#ce1126","#000"],Turkey:["#e30a17","#fff"],"Türkiye":["#e30a17","#fff"],"Saudi Arabia":["#006c35","#fff"]};
+const DEF_KIT=["#46c8ff","#0a0e1a"];
+
+const $=id=>document.getElementById(id);
+const selA=$("teamA"), selB=$("teamB");
+TEAMS.forEach(t=>{selA.add(new Option(t,t)); selB.add(new Option(t,t));});
+selA.value="Spain"; selB.value="Brazil";
+
+function footballer(kit){const[s,tr]=kit;return `<svg viewBox="0 0 12 20" shape-rendering="crispEdges">
+<rect x="4" y="0" width="4" height="4" fill="#f1c27d"/><rect x="4" y="0" width="4" height="1" fill="#3a2a1a"/>
+<rect x="3" y="4" width="6" height="7" fill="${s}"/><rect x="3" y="4" width="6" height="1" fill="${tr}"/>
+<rect x="2" y="5" width="1" height="5" fill="${s}"/><rect x="9" y="5" width="1" height="5" fill="${s}"/>
+<rect x="3" y="11" width="2" height="5" fill="#fff" class="leg"/><rect x="7" y="11" width="2" height="5" fill="#fff"/>
+<rect x="3" y="16" width="3" height="2" fill="#1a1a1a"/><rect x="7" y="16" width="3" height="2" fill="#1a1a1a"/></svg>`;}
+
+function lookup(a,b,venue){
+  const ia=TEAMS.indexOf(a), ib=TEAMS.indexOf(b);
+  if(venue==="B"){ // B home == A away: use B-home entry (b at home vs a) and mirror
+    const e=LK[`${ib}.${ia}.H`]; // [pH,pD,pA, sH,sA, xgH,xgA] from B's perspective at home
+    return {p:[e[2],e[1],e[0]], s:[e[4],e[3]], xg:[e[6],e[5]]}; // mirror back to A,B
+  }
+  const e=LK[`${ia}.${ib}.${venue}`];
+  return {p:[e[0],e[1],e[2]], s:[e[3],e[4]], xg:[e[5],e[6]]};
+}
+
+const pitch=$("pitch"),pA=$("pA"),pB=$("pB"),ball=$("ball"),flash=$("flash");
+const setX=(el,x)=>el.style.left=x+"%", setY=(el,y)=>el.style.top=y+"%";
+function reset(a,b){pA.innerHTML=footballer(KIT[a]||DEF_KIT); pB.innerHTML=footballer(KIT[b]||DEF_KIT);
+  setX(pA,30);setY(pA,45);setX(pB,64);setY(pB,45);setX(ball,48);setY(ball,46);
+  $("score").textContent="0 - 0";$("clock").textContent="00:00";}
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const reduce=matchMedia("(prefers-reduced-motion:reduce)").matches;
+
+let busy=false, sH=0, sA=0;
+async function play(){
+  if(busy)return; const a=selA.value,b=selB.value;
+  if(a===b){$("result").innerHTML='<div class="verdict">PICK TWO DIFFERENT NATIONS</div>';return;}
+  const venue=document.querySelector('input[name=venue]:checked').value;
+  const r=lookup(a,b,venue);
+  $("sbA").textContent=a.toUpperCase();$("sbB").textContent=b.toUpperCase();
+  busy=true;$("kick").disabled=true;$("result").innerHTML="";reset(a,b);
+  await wait(reduce?0:300);
+
+  // animate the EXACT Dixon-Coles scoreline
+  const tgtH=r.s[0], tgtA=r.s[1]; sH=0; sA=0;
+  const events=[]; for(let i=0;i<tgtH;i++)events.push("A"); for(let i=0;i<tgtA;i++)events.push("B");
+  // shuffle goal order for realism
+  for(let i=events.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[events[i],events[j]]=[events[j],events[i]];}
+  if(events.length===0){ await nearMiss(a===a); await wait(reduce?0:400); }
+  let minute=0;
+  for(const ev of events){
+    minute+=Math.floor(15+Math.random()*55);
+    $("clock").textContent=String(Math.min(minute,90)).padStart(2,"0")+":00";
+    await scoreGoal(ev==="A");
+    await wait(reduce?0:500);
+  }
+  $("score").textContent=`${tgtH} - ${tgtA}`; $("clock").textContent="90:00";
+  showResult(a,b,r);
+  busy=false;$("kick").disabled=false;
+}
+
+async function scoreGoal(isA){
+  const atk=isA?pA:pB, toRight=isA;
+  setX(atk,toRight?70:24);setY(atk,46);setX(ball,toRight?72:26);setY(ball,46);
+  await wait(reduce?0:300);
+  setX(ball,toRight?92:8);setY(ball,40+Math.random()*12);
+  await wait(reduce?0:260);
+  if(isA)sH++; else sA++;
+  $("score").textContent=`${sH} - ${sA}`;
+  flash.textContent="GOAL!!!"; flash.classList.remove("show");void flash.offsetWidth;flash.classList.add("show");
+  if(!reduce){$("cab").classList.remove("shake");void $("cab").offsetWidth;$("cab").classList.add("shake");}
+  await wait(reduce?0:650);
+  setX(ball,48);setY(ball,46);setX(atk,isA?30:64);
+  await wait(reduce?0:220);
+}
+async function nearMiss(){ setX(ball,90);setY(ball,30); await wait(reduce?0:300);
+  flash.textContent="SAVED!"; flash.classList.remove("show");void flash.offsetWidth;flash.classList.add("show");
+  await wait(reduce?0:500); setX(ball,48);setY(ball,46);}
+
+function showResult(a,b,r){
+  const pct=x=>Math.round(x*100);
+  const [pH,pD,pA_]=r.p, [scH,scA]=r.s;
+  const outcome = scH>scA?"A":scA>scH?"B":"D";
+  const top = pH>=pD&&pH>=pA_?0:(pD>=pA_?1:2);
+  const topName=[a,"Draw",b][top], topPct=pct([pH,pD,pA_][top]);
+  const headline = scH>scA?`${a.toUpperCase()} ${scH}-${scA}`:scA>scH?`${b.toUpperCase()} ${scA}-${scH}`:`DRAW ${scH}-${scA}`;
+  const rows=[[a,pH,"--win"],["Draw",pD,"--amber"],[b,pA_,"--lose"]];
+  const en=commEN(a,b,scH,scA,topName,topPct,r.xg,outcome);
+  const es=commES(a,b,scH,scA,topName,topPct,r.xg,outcome);
+  $("result").innerHTML=`
+    <div class="verdict">FULL TIME — ${headline}</div>
+    <div class="meta">model lean: ${topName} ${topPct}% · xG ${r.xg[0]}–${r.xg[1]}</div>
+    <div class="bars">${rows.map(([n,v,c])=>`
+      <div class="bar-row"><span>${n.length>9?n.slice(0,9):n}</span>
+      <div class="bar-track"><div class="bar-fill" style="background:var(${c})"></div></div>
+      <span>${pct(v)}%</span></div>`).join("")}</div>
+    <div class="comm">
+      <div class="comm-block"><div class="mic">📋 <span class="flag">ENGLISH</span> · GAME'S FINAL REVIEW</div>
+        <div class="comm-text">${en}</div></div>
+      <div class="comm-block"><div class="mic">📋 <span class="flag">ESPAÑOL</span> · ANÁLISIS DEL JUEGO</div>
+        <div class="comm-text es">${es}</div></div>
+    </div>`;
+  requestAnimationFrame(()=>document.querySelectorAll(".bar-fill").forEach((el,i)=>el.style.width=pct(rows[i][1])+"%"));
+}
+
+function pick(arr){return arr[Math.floor(Math.random()*arr.length)];}
+
+function commEN(a,b,scH,scA,topName,topPct,xg,outcome){
+  const winner=outcome==="A"?a:outcome==="B"?b:null, loser=outcome==="A"?b:a;
+  if(outcome==="D"){
+    return pick([
+      `And so it settles, ${scH}-${scA}, two nations refusing to yield. The model could scarcely separate them — a whisper of ${topPct}% toward ${topName} — and football, glorious football, keeps its secret. A stalemate written in the stars.`,
+      `Deadlock! ${scH} apiece, and neither will blink. The numbers leaned ${topPct}% to ${topName}, yet on nights like these the margins melt away. Honours, beautifully, even.`]);
+  }
+  if(topPct>=60){
+    return pick([
+      `Oh, you sense it from the very first whistle — ${winner} arrive not to compete, but to conquer. ${winner} ${Math.max(scH,scA)}-${Math.min(scH,scA)}. The model murmured it long before kick-off: ${topPct}% said this night belonged to them, and so it is. ${loser} chase shadows.`,
+      `On the grandest stage, the favourites do not flinch. ${winner}, with ${topPct}% behind them and ${Math.max(...xg)} expected goals at their feet, sweep ${loser} aside. A coronation, not a contest.`]);
+  }
+  return pick([
+    `Football! The finest of margins! ${winner} edge it, ${Math.max(scH,scA)}-${Math.min(scH,scA)}, in a night that could have tipped either way — ${topPct}% the slender lean. ${loser} will wonder how. The drama of it all!`,
+    `A heartbeat decides it. ${winner} find a way past ${loser}, the model barely daring to call it at ${topPct}%. This is why we watch — for the moments numbers can only guess at.`]);
+}
+
+function commES(a,b,scH,scA,topName,topPct,xg,outcome){
+  const winner=outcome==="A"?a:outcome==="B"?b:null, loser=outcome==="A"?b:a;
+  if(outcome==="D"){
+    return pick([
+      `¡Igualados, amigos! ${scH} a ${scA}, y ninguno se rinde. El modelo apenas los separa — ${topPct}% para ${topName} — pero el fútbol… ¡ah, el fútbol no entiende de números! Un empate de pura emoción.`,
+      `¡Qué partidazo! ${scH} a ${scH} y la balanza no se inclina. ${topPct}% decía ${topName}, pero en la cancha más grande del mundo, ¡los corazones laten igual de fuerte!`]);
+  }
+  if(topPct>=60){
+    return pick([
+      `¡Y desde el pitazo inicial se siente! ${winner} no vino a jugar… ¡vino a ganar! ¡GOOOOOOL! ${winner} ${Math.max(scH,scA)}-${Math.min(scH,scA)}. El modelo lo gritaba: ${topPct}% para ${winner}, ${Math.max(...xg)} goles esperados. ¡Qué manera de imponerse!`,
+      `¡${winner.toUpperCase()}, SEÑORES! Con el ${topPct}% a su favor, pasan por encima de ${loser}. ¡GOOOOOL y sentencia! Una clase magistral en el escenario más grande.`]);
+  }
+  return pick([
+    `¡Por un suspiro! ${winner} lo gana ${Math.max(scH,scA)}-${Math.min(scH,scA)} en una noche que pudo caer para cualquiera — apenas ${topPct}% de ventaja. ¡GOOOOOL agónico! ${loser} se pregunta cómo. ¡Esto es fútbol!`,
+    `¡Un latido lo define! ${winner} encuentra el camino ante ${loser}, y el modelo casi no se atreve: ${topPct}%. ¡GOOOOOL! Por esto vivimos el fútbol, amigos.`]);
+}
+
+$("kick").addEventListener("click",play);
+reset(selA.value,selB.value);
+</script>
+</body>
+</html>
