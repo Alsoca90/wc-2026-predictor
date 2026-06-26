@@ -1,0 +1,31 @@
+name: Daily retrain and deploy
+
+on:
+  schedule:
+    - cron: '0 6 * * *'       # 06:00 UTC
+    - cron: '0 18 * * *'      # 18:00 UTC  (twice daily, ~12h apart)
+  workflow_dispatch: {}       # adds a manual "Run workflow" button for testing
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install lightgbm scikit-learn scipy numpy pandas joblib huggingface_hub
+
+      - name: Retrain models + rebuild the app
+        run: python train_and_build_app.py   # pulls latest results.csv, retrains, writes wc_model.joblib + retro_predictor.html
+
+      - name: Push fresh artifacts to the HF Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ secrets.HF_SPACE }}   # e.g. your-username/wc-26-predictor
+        run: python push_to_space.py
