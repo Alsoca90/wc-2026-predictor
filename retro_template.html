@@ -106,6 +106,22 @@
   .br-detail{font-size:6px;color:var(--cyan);margin-top:4px;padding:4px 6px;background:rgba(70,200,255,.08);border-left:3px solid var(--cyan);line-height:1.7}
   .br-m{cursor:pointer}
   .br-out{color:var(--red)!important;border-left:3px solid var(--red);padding-left:6px}
+  .rs-meta{font-size:7px;color:var(--lose);text-align:center;margin-bottom:10px;line-height:1.8}
+  .rs-meta b{color:var(--amber)}
+  .rs-odds{font-size:8px;color:var(--cyan);text-align:center;margin-bottom:8px;line-height:1.7}
+  .road-scene{margin:6px 0 4px;text-align:center}
+  .rs-pitch{position:relative;height:92px;max-width:240px;margin:0 auto;border:3px solid var(--panel-edge);border-radius:6px;overflow:hidden;
+    background:repeating-linear-gradient(90deg,#1f7a3a 0 24px,#1c6f34 24px 48px)}
+  .rs-goal{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:9px;height:44px;border:2px solid #fff;border-left:none;opacity:.9}
+  .rs-ball{position:absolute;left:16px;top:50%;margin-top:-6px;width:12px;height:12px;border-radius:50%;background:#fff;box-shadow:inset 0 0 0 2px #000;transition:left .42s cubic-bezier(.3,.7,.3,1),top .42s}
+  .rs-ball.go{left:212px} .rs-ball.miss{left:206px;top:16%}
+  .rs-flash{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:17px;color:#fff;opacity:0;text-shadow:2px 2px 0 #000;text-align:center}
+  .rs-flash.on{opacity:1;animation:pop .35s} .rs-flash.win{color:var(--win)} .rs-flash.loss{color:#ff6b6b}
+  @keyframes pop{0%{transform:scale(.3)}60%{transform:scale(1.25)}100%{transform:scale(1)}}
+  .rs-score{font-size:13px;color:var(--amber);margin-top:8px;text-shadow:2px 2px 0 var(--ink)}
+  .rs-banner{font-size:11px;margin-top:6px} .rs-banner.win{color:var(--win)} .rs-banner.loss{color:var(--red)} .rs-banner.draw{color:var(--cyan)}
+  .confetti{position:absolute;top:0;font-size:14px;animation:fall .9s ease-in forwards}
+  @keyframes fall{0%{transform:translateY(-12px) rotate(0);opacity:1}100%{transform:translateY(80px) rotate(180deg);opacity:0}}
   .t-head{font-size:9px;color:var(--amber);text-align:center;margin:6px 0 12px;text-shadow:1px 1px 0 var(--ink)}
   .t-note{font-size:6px;color:var(--lose);text-align:center;margin-top:12px;line-height:1.8}
   .dist-row{display:grid;grid-template-columns:96px 1fr 38px;align-items:center;gap:8px;font-size:7px;margin-bottom:6px}
@@ -339,19 +355,20 @@ const GLET="ABCDEFGHIJKL".split("");
 const TOP=["J","I","E","F","B","A"], BOT=["H","L","C","K","G","D"];
 const OFFSET={}; GLET.forEach((g,i)=>OFFSET[g]=GLET[(i+2)%12]);
 const SIGMA=0.30;
-const ELIMINATED=["Haiti","Turkey","Tunisia","Jordan","Panama","Qatar","Curaçao","Czech Republic"]; // real, as of Jun 25
+const ELIMINATED=["Haiti","Turkey","Tunisia","Jordan","Panama","Qatar","Curaçao","Czech Republic"];
 const ALIVE=TEAMS.filter(t=>!ELIMINATED.includes(t)).slice().sort();
 
 function poisson(l){let L=Math.exp(-l),k=0,p=1;do{k++;p*=Math.random();}while(p>L);return k-1;}
 function randn(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+function nf(){const f={};TEAMS.forEach(t=>f[t]=randn()*SIGMA);return f;}
 function lkN(a,b){const ia=TEAMS.indexOf(a),ib=TEAMS.indexOf(b);return LK[ia+"."+ib+".N"];}
 function xgPair(a,b){const e=lkN(a,b);return [e[5],e[6]];}
+function advProb(team,opp){const e=lkN(team,opp);return e[0]+0.5*e[1];}  // win or win-on-pens
 function simMatch(a,b,form){const p=xgPair(a,b),adj=Math.exp(0.5*((form[a]||0)-(form[b]||0)));return [poisson(p[0]*adj),poisson(p[1]/adj)];}
 function ko(a,b,form){const[gh,ga]=simMatch(a,b,form);let w,l;if(gh>ga){w=a;l=b;}else if(ga>gh){w=b;l=a;}else{w=Math.random()<0.5?a:b;l=(w===a?b:a);}return{a,b,w,l,s:[gh,ga],pens:gh===ga};}
 
 function groupTable(teams,form,collectFor){
-  const pts={},gd={},gf={};teams.forEach(t=>{pts[t]=0;gd[t]=0;gf[t]=0;});
-  const mine=[];
+  const pts={},gd={},gf={};teams.forEach(t=>{pts[t]=0;gd[t]=0;gf[t]=0;});const mine=[];
   for(let i=0;i<4;i++)for(let j=i+1;j<4;j++){
     const a=teams[i],b=teams[j],[gh,ga]=simMatch(a,b,form);
     gf[a]+=gh;gf[b]+=ga;gd[a]+=gh-ga;gd[b]+=ga-gh;
@@ -361,66 +378,46 @@ function groupTable(teams,form,collectFor){
   const rank=teams.slice().sort((x,y)=>(pts[y]-pts[x])||(gd[y]-gd[x])||(gf[y]-gf[x])||(Math.random()-.5));
   return {rank,stat:t=>[pts[t],gd[t],gf[t]],mine};
 }
-
+function bestThirds(thirds){return thirds.slice().sort((x,y)=>(y[1][0]-x[1][0])||(y[1][1]-x[1][1])||(y[1][2]-x[1][2])||(Math.random()-.5)).slice(0,8).map(x=>x[0]);}
+function simGroups(form,collectGrp,collectTeam){
+  const winners={},runners={},thirds=[];let mine=[],myRank=null;
+  for(const g of GLET){const r=groupTable(GROUPS[g],form,(g===collectGrp)?collectTeam:null);winners[g]=r.rank[0];runners[g]=r.rank[1];thirds.push([r.rank[2],r.stat(r.rank[2])]);if(g===collectGrp){mine=r.mine;myRank=r.rank.indexOf(collectTeam);}}
+  return {winners,runners,thirds,bt:bestThirds(thirds),mine,myRank};
+}
 function simKnockouts(winners,runners,thirds,form){
   function half(groups,tp){let ms=groups.map(g=>[winners[g],runners[OFFSET[g]]]);ms.push([tp[0],tp[3]]);ms.push([tp[1],tp[2]]);return ms;}
-  function elim(ms){
-    const acc=[]; let games=ms.map(m=>ko(m[0],m[1],form)); acc.push(games);
-    let teams=games.map(g=>g.w);
-    while(teams.length>1){let nxt=[];for(let i=0;i<teams.length;i+=2)nxt.push(ko(teams[i],teams[i+1],form));acc.push(nxt);teams=nxt.map(g=>g.w);}
-    return acc;
-  }
-  const topAcc=elim(half(TOP,thirds.slice(0,4))), botAcc=elim(half(BOT,thirds.slice(4,8)));
-  const final=ko(topAcc[topAcc.length-1][0].w, botAcc[botAcc.length-1][0].w, form);
+  function elim(ms){const acc=[];let games=ms.map(m=>ko(m[0],m[1],form));acc.push(games);let teams=games.map(g=>g.w);while(teams.length>1){let nxt=[];for(let i=0;i<teams.length;i+=2)nxt.push(ko(teams[i],teams[i+1],form));acc.push(nxt);teams=nxt.map(g=>g.w);}return acc;}
+  const topAcc=elim(half(TOP,thirds.slice(0,4))),botAcc=elim(half(BOT,thirds.slice(4,8)));
+  const final=ko(topAcc[topAcc.length-1][0].w,botAcc[botAcc.length-1][0].w,form);
   return {topAcc,botAcc,final,champion:final.w};
 }
-
-function simChampion(form){
-  const winners={},runners={},thirds=[];
-  for(const g of GLET){const r=groupTable(GROUPS[g],form);winners[g]=r.rank[0];runners[g]=r.rank[1];thirds.push([r.rank[2],r.stat(r.rank[2])]);}
-  const bt=thirds.slice().sort((x,y)=>(y[1][0]-x[1][0])||(y[1][1]-x[1][1])||(y[1][2]-x[1][2])||(Math.random()-.5)).slice(0,8).map(x=>x[0]);
-  return simKnockouts(winners,runners,bt,form).champion;
-}
-function simBracket(form){
-  const winners={},runners={},thirds=[];
-  for(const g of GLET){const r=groupTable(GROUPS[g],form);winners[g]=r.rank[0];runners[g]=r.rank[1];thirds.push([r.rank[2],r.stat(r.rank[2])]);}
-  const bt=thirds.slice().sort((x,y)=>(y[1][0]-x[1][0])||(y[1][1]-x[1][1])||(y[1][2]-x[1][2])||(Math.random()-.5)).slice(0,8).map(x=>x[0]);
-  return simKnockouts(winners,runners,bt,form);
-}
+function simChampion(form){const G=simGroups(form);return simKnockouts(G.winners,G.runners,G.bt,form).champion;}
+function simBracket(form){const G=simGroups(form);return simKnockouts(G.winners,G.runners,G.bt,form);}
+function teamGroup(team){for(const g of GLET)if(GROUPS[g].includes(team))return g;}
 
 function simRoad(team,form){
-  let grp;for(const g of GLET)if(GROUPS[g].includes(team)){grp=g;break;}
-  const winners={},runners={},thirds=[];let myMatches=[],myRank=null,myStat=null;
-  for(const g of GLET){
-    const r=groupTable(GROUPS[g],form,g===grp?team:null);
-    winners[g]=r.rank[0];runners[g]=r.rank[1];thirds.push([r.rank[2],r.stat(r.rank[2])]);
-    if(g===grp){myMatches=r.mine;myRank=r.rank.indexOf(team);myStat=r.stat(team);}
-  }
-  const bt=thirds.slice().sort((x,y)=>(y[1][0]-x[1][0])||(y[1][1]-x[1][1])||(y[1][2]-x[1][2])||(Math.random()-.5)).slice(0,8).map(x=>x[0]);
-  const advanced=(team===winners[grp]||team===runners[grp]||(myRank===2&&bt.includes(team)));
-  const path={team,group:grp,groupMatches:myMatches,groupStat:myStat,advanced,koMatches:[],out:null,champion:false};
+  const grp=teamGroup(team);
+  const G=simGroups(form,grp,team);
+  const advanced=(team===G.winners[grp]||team===G.runners[grp]||(G.myRank===2&&G.bt.includes(team)));
+  const path={team,group:grp,groupMatches:G.mine,advanced,koMatches:[],out:null,champion:false};
   if(!advanced){path.out="GROUP STAGE";return path;}
-  const k=simKnockouts(winners,runners,bt,form);
+  const k=simKnockouts(G.winners,G.runners,G.bt,form);
   const rounds=[["ROUND OF 32",k.topAcc[0].concat(k.botAcc[0])],["ROUND OF 16",k.topAcc[1].concat(k.botAcc[1])],["QUARTER-FINAL",k.topAcc[2].concat(k.botAcc[2])],["SEMI-FINAL",[k.topAcc[3][0],k.botAcc[3][0]]],["FINAL",[k.final]]];
-  for(const [name,games] of rounds){
-    const g=games.find(x=>x.a===team||x.b===team);
-    if(!g)break;
-    path.koMatches.push({round:name,g});
-    if(g.l===team){path.out=name;break;}
-    if(name==="FINAL"&&g.w===team){path.champion=true;}
-  }
+  for(const [name,games] of rounds){const g=games.find(x=>x.a===team||x.b===team);if(!g)break;path.koMatches.push({round:name,g});if(g.l===team){path.out=name;break;}if(name==="FINAL"&&g.w===team)path.champion=true;}
   return path;
 }
+function groupEscapeProb(team,sims){let grp=teamGroup(team),adv=0;for(let s=0;s<sims;s++){const G=simGroups(nf(),grp,team);if(team===G.winners[grp]||team===G.runners[grp]||(G.myRank===2&&G.bt.includes(team)))adv++;}return adv/sims;}
 
-function runMC(n){const c={};for(let s=0;s<n;s++){const f={};TEAMS.forEach(t=>f[t]=randn()*SIGMA);const w=simChampion(f);c[w]=(c[w]||0)+1;}return Object.entries(c).sort((a,b)=>b[1]-a[1]).map(([t,v])=>[t,v/n]);}
+function runMC(n){const c={};for(let s=0;s<n;s++){const w=simChampion(nf());c[w]=(c[w]||0)+1;}return Object.entries(c).sort((a,b)=>b[1]-a[1]).map(([t,v])=>[t,v/n]);}
 function kitColor(t){return (KIT[t]||DEF_KIT)[0];}
+function out(){return document.getElementById("tourn-out");}
 
 function renderDist(dist,n){
   const top=dist.slice(0,16),max=top[0][1];
   let h=`<div class="t-head">🏆 TITLE ODDS — ${n} SIMULATIONS</div>`;
   top.forEach(([t,p])=>{h+=`<div class="dist-row"><span>${t.length>11?t.slice(0,11):t}</span><div class="dist-track"><div class="dist-fill" style="background:${kitColor(t)}"></div></div><span>${(p*100).toFixed(1)}%</span></div>`;});
-  h+=`<div class="t-note">Goal model: Dixon-Coles · per-tournament form noise + shootouts.<br>Leans on Elo, so favourites run hot vs betting markets.</div>`;
-  document.getElementById("tourn-out").innerHTML=h;
+  h+=`<div class="t-note">Dixon-Coles goals · form noise + shootouts. Leans on Elo, so favourites run hot vs markets.</div>`;
+  out().innerHTML=h;
   requestAnimationFrame(()=>document.querySelectorAll(".dist-fill").forEach((el,i)=>el.style.width=(top[i][1]/max*100)+"%"));
 }
 function mLine(g){const pen=g.pens?" <i>(pens)</i>":"";return `<div class="br-m" data-a="${g.a}" data-b="${g.b}"><b>${g.w}</b> ${g.s[0]}-${g.s[1]} ${g.l}${pen}</div>`;}
@@ -430,53 +427,100 @@ function renderBracket(br){
   h+=`<div class="br-round"><h4>SEMI-FINALS (half winners)</h4>${mLine(br.topAcc[br.topAcc.length-1][0])}${mLine(br.botAcc[br.botAcc.length-1][0])}</div>`;
   h+=`<div class="br-round"><h4>QUARTER-FINALS</h4>`+br.topAcc[2].concat(br.botAcc[2]).map(mLine).join("")+`</div>`;
   h+=`<div class="br-round"><h4>ROUND OF 32 — sample</h4>`+br.topAcc[0].slice(0,4).concat(br.botAcc[0].slice(0,4)).map(mLine).join("")+`</div>`;
-  h+=`<div class="t-note">👆 tap any match for the model's pre-match odds. One simulated run.</div></div>`;
-  document.getElementById("tourn-out").innerHTML=h;
+  h+=`<div class="t-note">👆 tap any match for the model's pre-match odds.</div></div>`;
+  out().innerHTML=h;
 }
 function matchDetail(a,b){const e=lkN(a,b);return `${a} ${Math.round(e[0]*100)}% · draw ${Math.round(e[1]*100)}% · ${b} ${Math.round(e[2]*100)}% — xG ${e[5].toFixed(1)}–${e[6].toFixed(1)}`;}
 
-let roadPath=null, roadStep=0;
-function renderRoad(){
-  const p=roadPath;
+// ---------- ROAD TO GLORY (animated + survival odds) ----------
+let R={};
+function roadSteps(p){
   const steps=[];
-  p.groupMatches.forEach(m=>{const opp=m.a===p.team?m.b:m.a;const gs=m.a===p.team?m.s:[m.s[1],m.s[0]];steps.push({label:`GROUP ${p.group}`,you:p.team,opp,s:gs});});
-  p.koMatches.forEach(km=>{const g=km.g;const opp=g.a===p.team?g.b:g.a;const ys=g.a===p.team?g.s:[g.s[1],g.s[0]];steps.push({label:km.round,you:p.team,opp,s:ys,pens:g.pens,lost:g.l===p.team});});
-  const shown=steps.slice(0,roadStep);
-  let h=`<div class="t-head">⭐ ROAD TO GLORY — ${p.team.toUpperCase()}</div><div class="bracket">`;
-  shown.forEach(s=>{
-    const res=s.s[0]>s.s[1]?"win":(s.s[0]<s.s[1]?"loss":"draw");
-    h+=`<div class="br-m ${s.lost?'br-out':res==='win'?'':''}"><b>${s.label}</b> · ${p.team} ${s.s[0]}-${s.s[1]} ${s.opp}${s.pens?" <i>(pens)</i>":""}</div>`;
-  });
-  h+=`</div>`;
-  if(roadStep<steps.length){h+=`<button class="kick" id="roadNext" style="margin-top:10px">NEXT MATCH ▶</button>`;}
-  else{
-    if(p.champion)h+=`<div class="champ">🏆 CHAMPIONS! 🏆</div><div class="trophy">🏆</div><div class="t-note">${p.team} won the World Cup in this simulation.</div>`;
-    else h+=`<div class="champ" style="color:var(--red)">❌ KNOCKED OUT</div><div class="t-note">${p.team} were eliminated at the ${p.out==="GROUP STAGE"?"group stage":p.out.toLowerCase()} by prediction.<br>Run again — the dice fall differently every time.</div>`;
+  p.groupMatches.forEach(m=>{const opp=m.a===p.team?m.b:m.a;const s=m.a===p.team?m.s:[m.s[1],m.s[0]];steps.push({kind:"group",label:"GROUP "+p.group,opp,s});});
+  p.koMatches.forEach(km=>{const g=km.g;const opp=g.a===p.team?g.b:g.a;const s=g.a===p.team?g.s:[g.s[1],g.s[0]];steps.push({kind:"ko",label:km.round,opp,s,pens:g.pens,lost:g.l===p.team});});
+  return steps;
+}
+function stepResult(s){if(s.kind==="ko")return s.lost?"loss":"win";return s.s[0]>s.s[1]?"win":(s.s[0]<s.s[1]?"loss":"draw");}
+function settledLine(s){
+  const r=stepResult(s);const ic=r==="win"?"✅":r==="loss"?"❌":"➖";const pen=s.pens?(s.lost?" (lost pens)":" (won pens)"):"";
+  return `<div class="br-m ${r==="loss"?"br-out":""}"><b>${s.label}</b> · ${R.team} ${s.s[0]}-${s.s[1]} ${s.opp} ${ic}${pen}</div>`;
+}
+function renderRoad(){
+  const p=R.path,steps=R.steps;
+  let h=`<div class="t-head">⭐ ROAD TO GLORY — ${p.team.toUpperCase()}</div>`;
+  h+=`<div class="rs-meta">Group ${p.group} · escape odds <b>${Math.round(R.escape*100)}%</b> · reached this far <b id="cumv">${Math.round(R.cum*100)}%</b></div>`;
+  h+=`<div class="bracket" id="road-settled">`+steps.slice(0,R.step).map(settledLine).join("")+`</div>`;
+  h+=`<div id="road-stage"></div>`;
+  out().innerHTML=h;
+  renderStage();
+}
+function renderStage(){
+  const stage=document.getElementById("road-stage"),steps=R.steps,p=R.path;
+  if(R.step<steps.length){
+    const s=steps[R.step];
+    let odds="";
+    if(s.kind==="ko"){const ap=Math.round(advProb(p.team,s.opp)*100);odds=`<div class="rs-odds">🎯 ${ap}% chance to get past the ${s.label.toLowerCase()}</div>`;}
+    else odds=`<div class="rs-odds">Group ${p.group} match vs ${s.opp}</div>`;
+    stage.innerHTML=`${odds}<button class="kick" id="roadNext">${R.step===0?"KICK OFF ▶":"NEXT MATCH ▶"}</button>`;
+    document.getElementById("roadNext").addEventListener("click",()=>playStep(s));
+  } else {
+    if(p.champion)stage.innerHTML=`<div class="champ">🏆 CHAMPIONS! 🏆</div><div class="trophy">🏆</div><div class="t-note">${p.team} won the World Cup — a ${Math.round(R.cum*100)}% path from the group.</div>`+roadControls();
+    else stage.innerHTML=`<div class="champ" style="color:var(--red)">❌ KNOCKED OUT</div><div class="rs-banner loss">eliminated at the ${p.out==="GROUP STAGE"?"group stage":p.out.toLowerCase()}</div><div class="t-note">Disqualified by prediction. The dice fall differently every run.</div>`+roadControls();
   }
-  document.getElementById("tourn-out").innerHTML=h;
-  const nb=document.getElementById("roadNext");
-  if(nb)nb.addEventListener("click",()=>{roadStep++;renderRoad();});
+}
+function roadControls(){return `<div class="road" style="margin-top:14px"><button class="kick" id="roadAgain">🔄 RUN AGAIN</button><button class="kick t-sim" id="roadBO5">🎰 BEST OF 5</button></div>`;}
+function startRoad(team){
+  R={team,escape:groupEscapeProb(team,500),path:simRoad(team,nf()),step:0,cum:0};
+  R.steps=roadSteps(R.path); R.cum=R.escape;
+  renderRoad();
+}
+function playStep(s){
+  const stage=document.getElementById("road-stage");
+  const res=stepResult(s),scored=s.s[0]>0;
+  const ball=res==="win"||res==="draw"?"go":"miss";
+  stage.innerHTML=`<div class="road-scene"><div class="rs-pitch"><div class="rs-goal"></div><div class="rs-ball" id="rball"></div><div class="rs-flash" id="rflash"></div></div><div class="rs-score" id="rscore">${R.team} 0 - 0 ${s.opp}</div></div>`;
+  const cab=document.getElementById("cab");
+  setTimeout(()=>{document.getElementById("rball").classList.add(ball);},120);
+  setTimeout(()=>{
+    const fl=document.getElementById("rflash");
+    if(res==="win"){fl.textContent="GOAL!";fl.classList.add("on","win");cab&&cab.classList.add("shake");burst(stage);}
+    else if(res==="draw"){fl.textContent="GOAL!";fl.classList.add("on","win");cab&&cab.classList.add("shake");}
+    else{fl.textContent="🧤 SAVED";fl.classList.add("on","loss");}
+  },520);
+  setTimeout(()=>{cab&&cab.classList.remove("shake");
+    document.getElementById("rscore").textContent=`${R.team} ${s.s[0]} - ${s.s[1]} ${s.opp}`;
+    const fl=document.getElementById("rflash");fl.className="rs-flash";
+    const r=res;fl.textContent=r==="win"?"⚽ WIN":r==="loss"?"💔 DEFEAT":"➖ DRAW";fl.classList.add("on",r);
+  },1050);
+  setTimeout(()=>{
+    if(s.kind==="ko"&&!s.lost)R.cum*=advProb(R.team,s.opp);
+    R.step++; renderRoad();
+  },1750);
+}
+function burst(host){const e=["🎉","⚽","🔥","⭐","🟢"];for(let i=0;i<8;i++){const c=document.createElement("div");c.className="confetti";c.textContent=e[i%e.length];c.style.left=(15+Math.random()*70)+"%";c.style.animationDelay=(Math.random()*.3)+"s";host.querySelector(".rs-pitch").appendChild(c);setTimeout(()=>c.remove(),1200);}}
+function bestOf5(team){
+  const tally={};let best=-1;const order=["GROUP STAGE","ROUND OF 32","ROUND OF 16","QUARTER-FINAL","SEMI-FINAL","FINAL","CHAMPION"];
+  for(let i=0;i<5;i++){const p=simRoad(team,nf());const key=p.champion?"CHAMPION":p.out;tally[key]=(tally[key]||0)+1;best=Math.max(best,order.indexOf(key));}
+  let h=`<div class="t-head">🎰 BEST OF 5 — ${team.toUpperCase()}</div><div class="bracket">`;
+  order.slice().reverse().forEach(k=>{if(tally[k])h+=`<div class="br-m ${k==="CHAMPION"?"":k==="GROUP STAGE"?"br-out":""}"><b>${k==="CHAMPION"?"🏆 CHAMPION":k}</b> ×${tally[k]}</div>`;});
+  h+=`</div><div class="t-note">Best run: <b>${order[best]==="CHAMPION"?"🏆 WON IT":order[best]}</b> · 5 independent simulations.</div>`+roadControls();
+  out().innerHTML=h;
 }
 
 // ---- wiring ----
-(function(){
-  const sel=document.getElementById("roadTeam");
-  if(sel){ALIVE.forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t;sel.appendChild(o);});}
-})();
-document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{
-  document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");
-  document.getElementById("view-match").hidden=t.dataset.view!=="match";
-  document.getElementById("view-tourn").hidden=t.dataset.view!=="tourn";
-}));
-document.getElementById("simMC").addEventListener("click",()=>{document.getElementById("tourn-out").innerHTML='<div class="t-head">SIMULATING 5000 TOURNAMENTS…</div>';setTimeout(()=>renderDist(runMC(5000),5000),30);});
-document.getElementById("simOne").addEventListener("click",()=>{const f={};TEAMS.forEach(t=>f[t]=randn()*SIGMA);renderBracket(simBracket(f));});
-document.getElementById("simRoad").addEventListener("click",()=>{const team=document.getElementById("roadTeam").value;const f={};TEAMS.forEach(t=>f[t]=randn()*SIGMA);roadPath=simRoad(team,f);roadStep=0;renderRoad();});
-document.getElementById("tourn-out").addEventListener("click",e=>{
-  const m=e.target.closest(".br-m"); if(!m||!m.dataset.a)return;
-  let d=m.querySelector(".br-detail");
-  if(d){d.remove();return;}
+(function(){const sel=document.getElementById("roadTeam");if(sel)ALIVE.forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t;sel.appendChild(o);});})();
+document.querySelectorAll(".tab").forEach(t=>t.addEventListener("click",()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");document.getElementById("view-match").hidden=t.dataset.view!=="match";document.getElementById("view-tourn").hidden=t.dataset.view!=="tourn";}));
+document.getElementById("simMC").addEventListener("click",()=>{out().innerHTML='<div class="t-head">SIMULATING 5000 TOURNAMENTS…</div>';setTimeout(()=>renderDist(runMC(5000),5000),30);});
+document.getElementById("simOne").addEventListener("click",()=>renderBracket(simBracket(nf())));
+document.getElementById("simRoad").addEventListener("click",()=>startRoad(document.getElementById("roadTeam").value));
+out_click();
+function out_click(){out().addEventListener("click",e=>{
+  if(e.target.id==="roadAgain"){startRoad(R.team);return;}
+  if(e.target.id==="roadBO5"){bestOf5(R.team);return;}
+  const m=e.target.closest(".br-m");if(!m||!m.dataset.a)return;
+  let d=m.querySelector(".br-detail");if(d){d.remove();return;}
   d=document.createElement("div");d.className="br-detail";d.textContent=matchDetail(m.dataset.a,m.dataset.b);m.appendChild(d);
-});
+});}
 
 </script>
 </body>
