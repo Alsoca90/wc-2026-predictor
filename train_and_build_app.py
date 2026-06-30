@@ -20,7 +20,14 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import urllib.request
+
+# Make console output locale-proof so CI never dies on an emoji/accent in a print()
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 import numpy as np
 import pandas as pd
@@ -34,12 +41,14 @@ RESULTS_URL = "https://raw.githubusercontent.com/martj42/international_results/m
 DC_WINDOW_START = "2018-01-01"      # recency window for Dixon-Coles strength
 DC_XI = 0.0018                       # time-decay; ~0.5 weight at ~1 year
 
-WC_TEAMS = ["Argentina","Spain","France","England","Brazil","Portugal","Netherlands","Germany",
-"Colombia","Morocco","Norway","Japan","Mexico","Switzerland","Ecuador","United States","Croatia",
-"Belgium","Italy","Denmark","Uruguay","Australia","Austria","Canada","Paraguay","Iran","South Korea",
-"Algeria","Nigeria","Senegal","Egypt","Ivory Coast","Ukraine","Serbia","Chile","Sweden","Panama",
-"Poland","Peru","Wales","Costa Rica","Cameroon","Saudi Arabia","New Zealand","Ghana","South Africa",
-"Tunisia","Qatar","Turkey"]
+WC_TEAMS = ["Canada","Mexico","United States",
+"Australia","Iraq","Iran","Japan","Jordan","South Korea","Qatar","Saudi Arabia","Uzbekistan",
+"Algeria","Cape Verde","DR Congo","Ivory Coast","Egypt","Ghana","Morocco","Senegal","South Africa","Tunisia",
+"Curaçao","Haiti","Panama",
+"Argentina","Brazil","Colombia","Ecuador","Paraguay","Uruguay",
+"New Zealand",
+"Austria","Belgium","Bosnia and Herzegovina","Croatia","Czech Republic","England","France","Germany",
+"Netherlands","Norway","Portugal","Scotland","Spain","Sweden","Switzerland","Turkey"]
 
 
 def ensure_results(path="results.csv"):
@@ -118,13 +127,30 @@ def main():
     lk = build_lookup(lgb, dc, states, teams)
     data = {"teams": teams, "elo": [round(states[t]["elo"]) for t in teams], "lk": lk}
 
-    # 5) inject into template
-    with open("retro_template.html") as f:
+    # 5) inject into template (explicit UTF-8 so CI locale can never mangle ç / emoji)
+    with open("retro_template.html", encoding="utf-8") as f:
         tpl = f.read()
-    html = tpl.replace("__EMBED_DATA__", json.dumps(data, separators=(",", ":")))
-    with open("retro_predictor.html", "w") as f:
+    if "__EMBED_DATA__" not in tpl:
+        raise SystemExit("ERROR: retro_template.html is missing the __EMBED_DATA__ slot — wrong/old template?")
+    # ensure_ascii=True keeps the embedded data pure-ASCII (\uXXXX), removing any encoding risk in the data
+    html = tpl.replace("__EMBED_DATA__", json.dumps(data, separators=(",", ":"), ensure_ascii=True))
+    with open("retro_predictor.html", "w", encoding="utf-8") as f:
         f.write(html)
-    print(f"wrote retro_predictor.html ({round(len(html)/1024)} KB) — ready to deploy.")
+    print(f"wrote retro_predictor.html ({round(len(html)/1024)} KB) - ready to deploy.")
+
+    # 6) build self-check — surfaces in the GitHub Actions log so a stale template can't slip by
+    checks = {
+        "MATCH tab": 'data-view="match"' in html,
+        "TOURNAMENT tab": 'data-view="tourn"' in html,
+        "Road to Glory": "ROAD TO GLORY" in html,
+        "clickable bracket": "matchDetail" in html,
+        "special chars intact (Curacao/emoji)": "Curaçao" in html,
+    }
+    print("build self-check:")
+    for name, ok in checks.items():
+        print(f"  [{'OK' if ok else 'MISSING'}] {name}")
+    if not all(checks.values()):
+        raise SystemExit("ERROR: built app is missing expected features — the repo template is likely outdated.")
 
 
 if __name__ == "__main__":
